@@ -2,12 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     
     <!-- Primary Meta Tags -->
-    <title>Free HEIC to JPG Converter - Convert HEIC Images to JPEG Online</title>
-    <meta name="title" content="Free HEIC to JPG Converter - Convert HEIC Images to JPEG Online">
-    <meta name="description" content="Convert HEIC files to JPG format instantly. Free, secure, and fast HEIC to JPEG converter. All processing happens locally in your browser - no file uploads required. Works on all devices.">
+    <title>Free HEIC to JPG Converter – Fast, Safe, Browser-Based</title>
+    <meta name="description" content="Convert HEIC images to JPG instantly in your browser. Free, secure, and works on desktop and mobile. Drag & drop or tap to select files.">
     <meta name="keywords" content="HEIC to JPG, HEIC converter, HEIC to JPEG, convert HEIC, HEIC to JPG online, free HEIC converter, iPhone photo converter, HEIC image converter">
     <meta name="author" content="HEIC to JPG Converter">
     <meta name="robots" content="index, follow">
@@ -15,16 +14,16 @@
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Free HEIC to JPG Converter - Convert HEIC Images to JPEG Online">
-    <meta property="og:description" content="Convert HEIC files to JPG format instantly. Free, secure, and fast HEIC to JPEG converter. All processing happens locally in your browser - no file uploads required.">
+    <meta property="og:title" content="Free HEIC to JPG Converter – Fast, Safe, Browser-Based">
+    <meta property="og:description" content="Convert HEIC images to JPG instantly in your browser. Free, secure, and works on desktop and mobile. Drag & drop or tap to select files.">
     <meta property="og:image" content="">
     <meta property="og:url" content="">
     <meta property="og:site_name" content="HEIC to JPG Converter">
     
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Free HEIC to JPG Converter - Convert HEIC Images to JPEG Online">
-    <meta name="twitter:description" content="Convert HEIC files to JPG format instantly. Free, secure, and fast HEIC to JPEG converter. All processing happens locally in your browser.">
+    <meta name="twitter:title" content="Free HEIC to JPG Converter – Fast, Safe, Browser-Based">
+    <meta name="twitter:description" content="Convert HEIC images to JPG instantly in your browser. Free, secure, and works on desktop and mobile. Drag & drop or tap to select files.">
     <meta name="twitter:image" content="">
     
     <!-- Performance Optimization -->
@@ -37,6 +36,9 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Ad space at top (optional) -->
+    <div id="ad-top" class="ad-space"></div>
+    
     <div class="container">
         <header>
             <h1>Convert HEIC to JPG</h1>
@@ -45,16 +47,16 @@
 
         <main>
             <div class="upload-section">
-                <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="File upload area. Click or drag and drop HEIC files here to convert them to JPG format.">
+                <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="File upload area. Tap to select or drag and drop HEIC files here to convert them to JPG format.">
                     <div class="drop-zone-content">
                         <svg class="upload-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                             <path d="M12 15V3M12 3L8 7M12 3L16 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                             <path d="M2 17L2 19C2 20.1046 2.89543 21 4 21L20 21C21.1046 21 22 20.1046 22 19L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
-                        <p class="drop-zone-text">Click to select files or drag and drop</p>
+                        <p class="drop-zone-text">Tap to select files or drag and drop</p>
                         <p class="drop-zone-hint">Select one or more HEIC files to convert</p>
                     </div>
-                    <input type="file" id="fileInput" multiple accept=".heic,.HEIC,.heif,.HEIF" aria-label="Select HEIC files to convert" hidden>
+                    <input type="file" id="fileInput" multiple accept=".heic,.HEIC,.heif,.HEIF,image/heic,image/heif" aria-label="Select HEIC files to convert" capture="environment">
                 </div>
 
                 <div class="file-list" id="fileList"></div>
@@ -85,6 +87,9 @@
             <p>All conversions happen locally in your browser. No files are uploaded.</p>
         </footer>
     </div>
+    
+    <!-- Ad space at bottom (optional) -->
+    <div id="ad-bottom" class="ad-space"></div>
 
     <script src="https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js"></script>
     <script>
@@ -109,4 +114,3 @@
     <script src="script.js"></script>
 </body>
 </html>
-

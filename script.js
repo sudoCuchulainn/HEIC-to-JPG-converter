@@ -7,6 +7,11 @@ let libraryReady = false;
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB max per file
 const MAX_TOTAL_FILES = 20; // Maximum number of files at once
 
+// Detect mobile device
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+const isAndroid = /Android/.test(navigator.userAgent);
+
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 const fileList = document.getElementById('fileList');
@@ -53,6 +58,14 @@ dropZone.addEventListener('keydown', (e) => {
     }
 });
 
+// Mobile-specific: Handle touch events
+if (isMobile) {
+    dropZone.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        fileInput.click();
+    });
+}
+
 // Initialize
 dropZone.addEventListener('click', () => fileInput.click());
 dropZone.addEventListener('dragover', handleDragOver);
@@ -82,7 +95,41 @@ function handleDrop(e) {
 
 function handleFileSelect(e) {
     const files = Array.from(e.target.files);
-    addFiles(files);
+    if (files.length > 0) {
+        addFiles(files);
+    }
+    // Reset input to allow selecting the same file again
+    e.target.value = '';
+}
+
+// Check if file is HEIC/HEIF (mobile-friendly detection)
+function isHEICFile(file) {
+    const fileName = file.name.toLowerCase();
+    const fileType = file.type ? file.type.toLowerCase() : '';
+    
+    // Check extension
+    if (fileName.endsWith('.heic') || fileName.endsWith('.heif')) {
+        return true;
+    }
+    
+    // Check MIME type (mobile browsers sometimes report this)
+    if (fileType === 'image/heic' || 
+        fileType === 'image/heif' || 
+        fileType === 'image/heic-sequence' ||
+        fileType === 'image/heif-sequence') {
+        return true;
+    }
+    
+    // iOS sometimes reports HEIC files with generic image type
+    if (isIOS && fileType.startsWith('image/') && file.size > 0) {
+        // On iOS, if it's an image but not a common format, it might be HEIC
+        const commonImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        if (!commonImageTypes.includes(fileType)) {
+            return true; // Assume it might be HEIC
+        }
+    }
+    
+    return false;
 }
 
 function addFiles(files) {
@@ -98,10 +145,8 @@ function addFiles(files) {
     }
 
     files.forEach(file => {
-        const fileName = file.name.toLowerCase();
-        
-        // Check file extension
-        if (!fileName.endsWith('.heic') && !fileName.endsWith('.heif')) {
+        // Check file type (mobile-friendly)
+        if (!isHEICFile(file)) {
             invalidFiles.push(file.name);
             return;
         }
@@ -121,13 +166,20 @@ function addFiles(files) {
         validFiles.push(file);
     });
 
-    // Show error messages
+    // Show error messages - clear and helpful
     if (invalidFiles.length > 0) {
-        showMessage(`The following files are not HEIC/HEIF files and were skipped: ${invalidFiles.slice(0, 3).join(', ')}${invalidFiles.length > 3 ? ' and ' + (invalidFiles.length - 3) + ' more' : ''}`, 'error');
+        const errorMsg = isMobile 
+            ? `Cannot convert: Selected files are not HEIC format. Please select HEIC files from your photo library.`
+            : `Cannot convert: The following files are not HEIC/HEIF format and were skipped: ${invalidFiles.slice(0, 3).join(', ')}${invalidFiles.length > 3 ? ' and ' + (invalidFiles.length - 3) + ' more' : ''}`;
+        showMessage(errorMsg, 'error');
     }
 
     if (tooLargeFiles.length > 0) {
-        showMessage(`The following files are too large (max ${MAX_FILE_SIZE / (1024 * 1024)}MB) and were skipped: ${tooLargeFiles.slice(0, 3).join(', ')}${tooLargeFiles.length > 3 ? ' and ' + (tooLargeFiles.length - 3) + ' more' : ''}`, 'error');
+        const maxSizeMB = MAX_FILE_SIZE / (1024 * 1024);
+        const errorMsg = isMobile
+            ? `Cannot convert: File is too large. Maximum file size is ${maxSizeMB}MB. Please select a smaller file.`
+            : `Cannot convert: The following files are too large (maximum ${maxSizeMB}MB) and were skipped: ${tooLargeFiles.slice(0, 3).join(', ')}${tooLargeFiles.length > 3 ? ' and ' + (tooLargeFiles.length - 3) + ' more' : ''}`;
+        showMessage(errorMsg, 'error');
     }
 
     if (duplicateFiles.length > 0 && validFiles.length > 0) {
@@ -205,11 +257,12 @@ async function handleConvert() {
     // Wait a bit more if library just loaded
     if (!libraryReady) {
         showMessage('Library is still initializing, please wait...', 'error');
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 1000));
         if (typeof heic2any === 'undefined') {
             showMessage('Conversion library failed to load. Please refresh the page.', 'error');
             return;
         }
+        libraryReady = true;
     }
 
     // Reset
@@ -223,6 +276,7 @@ async function handleConvert() {
     const totalFiles = selectedFiles.length;
     let completed = 0;
     let hasErrors = false;
+    const errorDetails = [];
 
     try {
         for (let i = 0; i < selectedFiles.length; i++) {
@@ -232,22 +286,36 @@ async function handleConvert() {
 
             try {
                 // Verify file type
-                const fileExtension = file.name.toLowerCase();
-                if (!file.type && !fileExtension.endsWith('.heic') && !fileExtension.endsWith('.heif')) {
+                if (!isHEICFile(file)) {
                     throw new Error('File does not appear to be a HEIC/HEIF file');
                 }
                 
-                // Add timeout for large files (5 minutes max per file)
+                // Mobile-specific: Check if file is actually readable
+                if (file.size === 0) {
+                    throw new Error('File appears to be empty or corrupted');
+                }
+                
+                // Add timeout for large files (longer timeout on mobile)
+                const timeoutDuration = isMobile ? 600000 : 300000; // 10 min mobile, 5 min desktop
                 const conversionPromise = heic2any({
                     blob: file,
                     toType: 'image/jpeg',
                     quality: 0.9
                 }).catch(err => {
-                    throw new Error(`Conversion failed: ${err.message || 'Unknown error'}`);
+                    // Provide clear, actionable error messages
+                    let errorMessage = 'Cannot convert this file';
+                    if (err.message) {
+                        errorMessage = `Cannot convert: ${err.message}`;
+                    } else if (err.toString && err.toString().includes('Worker')) {
+                        errorMessage = 'Cannot convert: Browser compatibility issue. Please try using Chrome or Safari browser.';
+                    } else if (isMobile) {
+                        errorMessage = 'Cannot convert: File conversion failed. The file may be corrupted, too large, or in an unsupported format.';
+                    }
+                    throw new Error(errorMessage);
                 });
 
                 const timeoutPromise = new Promise((_, reject) => {
-                    setTimeout(() => reject(new Error('Conversion timeout - file may be too large or corrupted')), 300000);
+                    setTimeout(() => reject(new Error('Cannot convert: Conversion timed out. File may be too large or corrupted. Maximum file size is 50MB.')), timeoutDuration);
                 });
 
                 const convertedBlob = await Promise.race([conversionPromise, timeoutPromise]);
@@ -263,7 +331,12 @@ async function handleConvert() {
                 }
 
                 if (!blob || !(blob instanceof Blob)) {
-                    throw new Error('Conversion did not return a valid image blob');
+                    throw new Error('Cannot convert: Conversion did not produce a valid image file');
+                }
+                
+                // Verify the blob has content
+                if (blob.size === 0) {
+                    throw new Error('Cannot convert: Converted file is empty. The original file may be corrupted.');
                 }
                 
                 const convertedFileName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
@@ -287,7 +360,13 @@ async function handleConvert() {
             } catch (error) {
                 hasErrors = true;
                 const errorMsg = error.message || 'Unknown error';
-                showMessage(`Error converting ${file.name}: ${errorMsg}`, 'error');
+                errorDetails.push(`${file.name}: ${errorMsg}`);
+                
+                // Show clear error for this specific file
+                const mobileErrorMsg = isMobile 
+                    ? `Cannot convert ${file.name}. ${errorMsg.includes('timeout') ? 'File is too large (max 50MB).' : errorMsg.includes('Cannot convert') ? errorMsg : 'Please try a different file or check if the file is a valid HEIC format.'}`
+                    : `Cannot convert ${file.name}. ${errorMsg}`;
+                showMessage(mobileErrorMsg, 'error');
             }
         }
 
@@ -301,10 +380,16 @@ async function handleConvert() {
             showDownloadSection();
         } else {
             progressText.textContent = 'Conversion failed';
-            showMessage('No files were successfully converted. Please try again with different files.', 'error');
+            const failureMsg = isMobile
+                ? 'Cannot convert: No files were successfully converted. This may be due to browser compatibility. Please try using Chrome or Safari browser, or convert files one at a time.'
+                : 'Cannot convert: No files were successfully converted. Please check that your files are valid HEIC format and try again.';
+            showMessage(failureMsg, 'error');
         }
     } catch (error) {
-        showMessage(`An error occurred during conversion: ${error.message || 'Unknown error'}`, 'error');
+        const errorMsg = isMobile
+            ? `An error occurred: ${error.message || 'Unknown error'}. Try refreshing the page or using a different browser.`
+            : `An error occurred during conversion: ${error.message || 'Unknown error'}`;
+        showMessage(errorMsg, 'error');
     } finally {
         convertBtn.disabled = false;
         setTimeout(() => {
@@ -374,10 +459,18 @@ function showMessage(text, type) {
     message.textContent = text;
     message.className = `message ${type}`;
     message.style.display = 'block';
+    
+    // Auto-hide success messages after 5 seconds
+    if (type === 'success') {
+        setTimeout(() => {
+            if (message.className.includes('success')) {
+                hideMessage();
+            }
+        }, 5000);
+    }
 }
 
 function hideMessage() {
     message.style.display = 'none';
     message.className = 'message';
 }
-
