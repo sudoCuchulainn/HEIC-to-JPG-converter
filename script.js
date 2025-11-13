@@ -107,7 +107,7 @@ function isHEICFile(file) {
     const fileName = file.name.toLowerCase();
     const fileType = file.type ? file.type.toLowerCase() : '';
     
-    // Check extension
+    // Check extension first (most reliable)
     if (fileName.endsWith('.heic') || fileName.endsWith('.heif')) {
         return true;
     }
@@ -120,12 +120,21 @@ function isHEICFile(file) {
         return true;
     }
     
-    // iOS sometimes reports HEIC files with generic image type
-    if (isIOS && fileType.startsWith('image/') && file.size > 0) {
-        // On iOS, if it's an image but not a common format, it might be HEIC
-        const commonImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-        if (!commonImageTypes.includes(fileType)) {
-            return true; // Assume it might be HEIC
+    // iOS Safari specific handling
+    if (isIOS && file.size > 0) {
+        // iOS sometimes reports HEIC files with empty type or generic image type
+        // But we need to be more careful - only trust if filename suggests HEIC
+        // or if type is empty AND file is reasonably large (HEIC files are typically > 100KB)
+        if (fileType === '' && file.size > 100000) {
+            // Empty type on iOS with large file size might be HEIC
+            // But we'll let the conversion library decide - accept it tentatively
+            // The library will fail gracefully if it's not actually HEIC
+            return true;
+        }
+        
+        // If filename contains HEIC-related terms (even without extension)
+        if (fileName.includes('heic') || fileName.includes('heif')) {
+            return true;
         }
     }
     
@@ -168,8 +177,20 @@ function addFiles(files) {
 
     // Show error messages - clear and helpful
     if (invalidFiles.length > 0) {
+        // Log invalid files for debugging
+        if (isIOS) {
+            console.warn('Invalid files detected:', invalidFiles.map(name => {
+                const file = files.find(f => f.name === name);
+                return {
+                    name: name,
+                    type: file ? (file.type || '(empty)') : 'unknown',
+                    size: file ? file.size : 'unknown'
+                };
+            }));
+        }
+        
         const errorMsg = isMobile 
-            ? `Cannot convert: Selected files are not HEIC format. Please select HEIC files from your photo library.`
+            ? `Cannot convert: Selected files are not HEIC format. Please select HEIC files from your photo library. On iPhone, make sure to select files with .HEIC extension.`
             : `Cannot convert: The following files are not HEIC/HEIF format and were skipped: ${invalidFiles.slice(0, 3).join(', ')}${invalidFiles.length > 3 ? ' and ' + (invalidFiles.length - 3) + ' more' : ''}`;
         showMessage(errorMsg, 'error');
     }
@@ -297,15 +318,47 @@ async function handleConvert() {
                 
                 // Add timeout for large files (longer timeout on mobile)
                 const timeoutDuration = isMobile ? 600000 : 300000; // 10 min mobile, 5 min desktop
+                
+                // Log file details for debugging (especially on iOS)
+                if (isIOS) {
+                    console.log('Converting file:', {
+                        name: file.name,
+                        type: file.type || '(empty)',
+                        size: file.size,
+                        sizeMB: (file.size / (1024 * 1024)).toFixed(2)
+                    });
+                }
+                
                 const conversionPromise = heic2any({
                     blob: file,
                     toType: 'image/jpeg',
                     quality: 0.9
                 }).catch(err => {
+                    // Log detailed error for debugging
+                    console.error('heic2any conversion error:', err);
+                    console.error('Error details:', {
+                        message: err.message,
+                        name: err.name,
+                        stack: err.stack,
+                        file: file.name,
+                        fileType: file.type,
+                        fileSize: file.size
+                    });
+                    
                     // Provide clear, actionable error messages
                     let errorMessage = 'Cannot convert this file';
                     if (err.message) {
-                        errorMessage = `Cannot convert: ${err.message}`;
+                        // Check for specific error patterns
+                        const errMsg = err.message.toLowerCase();
+                        if (errMsg.includes('worker') || errMsg.includes('web worker')) {
+                            errorMessage = 'Cannot convert: Browser compatibility issue. Please try using Chrome or Safari browser.';
+                        } else if (errMsg.includes('format') || errMsg.includes('unsupported')) {
+                            errorMessage = 'Cannot convert: File format not supported. Please ensure the file is a valid HEIC image.';
+                        } else if (errMsg.includes('corrupt') || errMsg.includes('invalid')) {
+                            errorMessage = 'Cannot convert: File appears to be corrupted or invalid.';
+                        } else {
+                            errorMessage = `Cannot convert: ${err.message}`;
+                        }
                     } else if (err.toString && err.toString().includes('Worker')) {
                         errorMessage = 'Cannot convert: Browser compatibility issue. Please try using Chrome or Safari browser.';
                     } else if (isMobile) {
@@ -361,6 +414,15 @@ async function handleConvert() {
                 hasErrors = true;
                 const errorMsg = error.message || 'Unknown error';
                 errorDetails.push(`${file.name}: ${errorMsg}`);
+                
+                // Log error details for debugging
+                console.error(`Conversion failed for ${file.name}:`, error);
+                console.error('File details:', {
+                    name: file.name,
+                    type: file.type || '(empty)',
+                    size: file.size,
+                    detectedAsHEIC: isHEICFile(file)
+                });
                 
                 // Show clear error for this specific file
                 const mobileErrorMsg = isMobile 
